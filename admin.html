@@ -37,6 +37,7 @@
   
   .btn { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; }
   .btn:hover { background: #1A6C82; }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
   
   .error { color: #D32F2F; font-size: 13px; text-align: center; display: none; margin-bottom: 10px; }
 
@@ -54,6 +55,8 @@
   .badge { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
   .badge-yes { background: #E8F5E9; color: #2E7D32; }
   .badge-no { background: #FFEBEE; color: #C62828; }
+  
+  .loading-text { text-align: center; color: var(--text-muted); font-size: 14px; padding: 20px; font-weight: 500; }
 </style>
 </head>
 <body>
@@ -69,20 +72,27 @@
 <div class="admin-panel" id="dashboardScreen" style="display: none;">
   <h2>Guest List</h2>
   
-  <div class="stat-grid" id="adminStats"></div>
+  <div class="stat-grid" id="adminStats">
+    <div class="stat-box"><div class="stat-num">-</div><div class="stat-lbl">Total Guests</div></div>
+    <div class="stat-box"><div class="stat-num">-</div><div class="stat-lbl">Confirmed (Yes)</div></div>
+  </div>
   
-  <div class="list-container" id="adminList"></div>
+  <div class="list-container" id="adminList">
+    <div class="loading-text">Loading live data from Google Sheets...</div>
+  </div>
   
   <button class="btn" style="background: var(--text-muted);" onclick="location.reload()">Logout</button>
 </div>
 
 <script>
+  // YOUR GOOGLE SCRIPT URL:
+  const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwIYk2aXRiSfXh7G8BTYEj4Mtx76TiC99cdrRQlvqZ-CVD_ms2X-Vgj2TWnC6Svwxi4/exec";
+
   // Login Logic
   document.getElementById('loginBtn').addEventListener('click', () => {
     const id = document.getElementById('adminId').value;
     const pin = document.getElementById('adminPin').value;
     
-    // Hardcoded credentials for your event
     if (id === "admin" && pin === "2026") {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('dashboardScreen').style.display = 'block';
@@ -92,34 +102,38 @@
     }
   });
 
-  // Load Data
-  function loadData() {
-    // NOTE: This reads from Local Storage. If you connected your index.html to Google Sheets, 
-    // you will view your live 100+ guests directly in the Google Sheets app instead of here.
-    let guests = JSON.parse(localStorage.getItem('docflix_guests') || '[]');
-    
-    const attending = guests.filter(g => g.attending);
-    const totalHeadcount = attending.reduce((sum, g) => sum + parseInt(g.guests), 0);
+  // Fetch Live Data from Google Sheets
+  async function loadData() {
+    try {
+      const response = await fetch(GOOGLE_SCRIPT_URL);
+      let guests = await response.json();
+      
+      const attending = guests.filter(g => g.attending);
+      const totalHeadcount = attending.reduce((sum, g) => sum + parseInt(g.guests || 0), 0);
 
-    document.getElementById('adminStats').innerHTML = `
-      <div class="stat-box"><div class="stat-num">${totalHeadcount}</div><div class="stat-lbl">Total Guests</div></div>
-      <div class="stat-box"><div class="stat-num">${attending.length}</div><div class="stat-lbl">Confirmed (Yes)</div></div>
-    `;
+      document.getElementById('adminStats').innerHTML = `
+        <div class="stat-box"><div class="stat-num">${totalHeadcount}</div><div class="stat-lbl">Total Guests</div></div>
+        <div class="stat-box"><div class="stat-num">${attending.length}</div><div class="stat-lbl">Confirmed (Yes)</div></div>
+      `;
 
-    if (guests.length === 0) {
-      document.getElementById('adminList').innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size: 13px; padding: 20px;">No responses yet.</p>';
-      return;
-    }
+      if (guests.length === 0) {
+        document.getElementById('adminList').innerHTML = '<p class="loading-text">No responses yet.</p>';
+        return;
+      }
 
-    document.getElementById('adminList').innerHTML = guests.reverse().map(g => `
-      <div class="list-row">
-        <div>
-          <div class="list-name">${g.name}</div>
-          <div class="list-meta">${g.phone ? g.phone + ' | ' : ''}${g.time || ''}</div>
+      document.getElementById('adminList').innerHTML = guests.reverse().map(g => `
+        <div class="list-row">
+          <div>
+            <div class="list-name">${g.name}</div>
+            <div class="list-meta">${g.phone ? g.phone + ' | ' : ''}${g.time || ''}</div>
+          </div>
+          <div class="badge ${g.attending ? 'badge-yes' : 'badge-no'}">${g.attending ? g.guests + ' Coming' : 'Declined'}</div>
         </div>
-        <div class="badge ${g.attending ? 'badge-yes' : 'badge-no'}">${g.attending ? g.guests + ' Coming' : 'Declined'}</div>
-      </div>
-    `).join('');
+      `).join('');
+
+    } catch (error) {
+      document.getElementById('adminList').innerHTML = '<p class="loading-text" style="color: red;">Error loading data. Make sure your Google URL is correct.</p>';
+    }
   }
 </script>
 </body>
