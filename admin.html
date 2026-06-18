@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Organiser Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #0F4C5C; 
+    --accent: #D4AF37; 
+    --bg-color: #F4F7F6; 
+    --card-bg: #FFFFFF;
+    --text-dark: #1A252C;
+    --text-muted: #5C6F7B;
+    --border: #E0E7E9;
+  }
+  
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-dark);
+    font-family: 'Montserrat', sans-serif;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; margin: 0; padding: 20px;
+  }
+
+  .admin-panel {
+    background: var(--card-bg); border-radius: 12px; width: 100%; max-width: 500px; 
+    padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  }
+
+  h2 { color: var(--primary); text-align: center; margin-bottom: 24px; }
+  
+  .form-group { margin-bottom: 16px; }
+  input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 14px; margin-bottom: 10px; box-sizing: border-box;}
+  input:focus { outline: none; border-color: var(--primary); }
+  
+  .btn { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+  .btn:hover { background: #1A6C82; }
+  
+  .error { color: #D32F2F; font-size: 13px; text-align: center; display: none; margin-bottom: 10px; }
+
+  /* Dashboard Styles */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .stat-box { background: var(--bg-color); padding: 15px; border-radius: 8px; text-align: center; }
+  .stat-num { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .stat-lbl { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+  
+  .list-container { max-height: 400px; overflow-y: auto; margin-bottom: 20px; border: 1px solid var(--border); border-radius: 8px; padding: 10px;}
+  .list-row { padding: 12px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .list-row:last-child { border-bottom: none; }
+  .list-name { font-weight: 600; font-size: 13px; }
+  .list-meta { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+  .badge { padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+  .badge-yes { background: #E8F5E9; color: #2E7D32; }
+  .badge-no { background: #FFEBEE; color: #C62828; }
+</style>
+</head>
+<body>
+
+<div class="admin-panel" id="loginScreen">
+  <h2>Organiser Login</h2>
+  <div class="error" id="loginError">Incorrect ID or Password.</div>
+  <input type="text" id="adminId" placeholder="Admin ID" />
+  <input type="password" id="adminPin" placeholder="Password" />
+  <button class="btn" id="loginBtn">Access Dashboard</button>
+</div>
+
+<div class="admin-panel" id="dashboardScreen" style="display: none;">
+  <h2>Guest List</h2>
+  
+  <div class="stat-grid" id="adminStats"></div>
+  
+  <div class="list-container" id="adminList"></div>
+  
+  <button class="btn" style="background: var(--text-muted);" onclick="location.reload()">Logout</button>
+</div>
+
+<script>
+  // Login Logic
+  document.getElementById('loginBtn').addEventListener('click', () => {
+    const id = document.getElementById('adminId').value;
+    const pin = document.getElementById('adminPin').value;
+    
+    // Hardcoded credentials for your event
+    if (id === "admin" && pin === "2026") {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('dashboardScreen').style.display = 'block';
+      loadData();
+    } else {
+      document.getElementById('loginError').style.display = 'block';
+    }
+  });
+
+  // Load Data
+  function loadData() {
+    // NOTE: This reads from Local Storage. If you connected your index.html to Google Sheets, 
+    // you will view your live 100+ guests directly in the Google Sheets app instead of here.
+    let guests = JSON.parse(localStorage.getItem('docflix_guests') || '[]');
+    
+    const attending = guests.filter(g => g.attending);
+    const totalHeadcount = attending.reduce((sum, g) => sum + parseInt(g.guests), 0);
+
+    document.getElementById('adminStats').innerHTML = `
+      <div class="stat-box"><div class="stat-num">${totalHeadcount}</div><div class="stat-lbl">Total Guests</div></div>
+      <div class="stat-box"><div class="stat-num">${attending.length}</div><div class="stat-lbl">Confirmed (Yes)</div></div>
+    `;
+
+    if (guests.length === 0) {
+      document.getElementById('adminList').innerHTML = '<p style="text-align:center; color:var(--text-muted); font-size: 13px; padding: 20px;">No responses yet.</p>';
+      return;
+    }
+
+    document.getElementById('adminList').innerHTML = guests.reverse().map(g => `
+      <div class="list-row">
+        <div>
+          <div class="list-name">${g.name}</div>
+          <div class="list-meta">${g.phone ? g.phone + ' | ' : ''}${g.time || ''}</div>
+        </div>
+        <div class="badge ${g.attending ? 'badge-yes' : 'badge-no'}">${g.attending ? g.guests + ' Coming' : 'Declined'}</div>
+      </div>
+    `).join('');
+  }
+</script>
+</body>
+</html>
