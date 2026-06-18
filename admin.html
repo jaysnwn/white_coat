@@ -105,15 +105,17 @@
   // Fetch Live Data from Google Sheets
   async function loadData() {
     try {
-      const response = await fetch("https://script.google.com/macros/s/AKfycbwIYk2aXRiSfXh7G8BTYEj4Mtx76TiC99cdrRQlvqZ-CVD_ms2X-Vgj2TWnC6Svwxi4/exec") ;
+      const response = await fetch(GOOGLE_SCRIPT_URL);
       let guests = await response.json();
       
-      const attending = guests.filter(g => g.attending);
-      const totalHeadcount = attending.reduce((sum, g) => sum + parseInt(g.guests || 0), 0);
+      // Filter for those who confirmed attendance
+      // Note: We check if attending is true (boolean) or "Coming" (string)
+      const attendingList = guests.filter(g => g.attending === true || g.attending === "Coming" || g.attending === "true");
+      const totalHeadcount = attendingList.reduce((sum, g) => sum + parseInt(g.guests || 0), 0);
 
       document.getElementById('adminStats').innerHTML = `
         <div class="stat-box"><div class="stat-num">${totalHeadcount}</div><div class="stat-lbl">Total Guests</div></div>
-        <div class="stat-box"><div class="stat-num">${attending.length}</div><div class="stat-lbl">Confirmed (Yes)</div></div>
+        <div class="stat-box"><div class="stat-num">${attendingList.length}</div><div class="stat-lbl">Confirmed (Yes)</div></div>
       `;
 
       if (guests.length === 0) {
@@ -121,18 +123,23 @@
         return;
       }
 
-      document.getElementById('adminList').innerHTML = guests.reverse().map(g => `
-        <div class="list-row">
-          <div>
-            <div class="list-name">${g.name}</div>
-            <div class="list-meta">${g.phone ? g.phone + ' | ' : ''}${g.time || ''}</div>
+      document.getElementById('adminList').innerHTML = guests.reverse().map(g => {
+        // Handle the attending status badge
+        const isComing = g.attending === true || g.attending === "Coming" || g.attending === "true";
+        return `
+          <div class="list-row">
+            <div>
+              <div class="list-name">${g.name || 'Unknown'}</div>
+              <div class="list-meta">${g.phone ? g.phone + ' | ' : ''}${g.time || ''}</div>
+            </div>
+            <div class="badge ${isComing ? 'badge-yes' : 'badge-no'}">${isComing ? g.guests + ' Coming' : 'Declined'}</div>
           </div>
-          <div class="badge ${g.attending ? 'badge-yes' : 'badge-no'}">${g.attending ? g.guests + ' Coming' : 'Declined'}</div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
 
     } catch (error) {
-      document.getElementById('adminList').innerHTML = '<p class="loading-text" style="color: red;">Error loading data. Make sure your Google URL is correct.</p>';
+      console.error(error);
+      document.getElementById('adminList').innerHTML = '<p class="loading-text" style="color: red;">Error processing data.</p>';
     }
   }
 </script>
