@@ -85,8 +85,8 @@
 </div>
 
 <script>
-  // YOUR GOOGLE SCRIPT URL:
-  const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwIYk2aXRiSfXh7G8BTYEj4Mtx76TiC99cdrRQlvqZ-CVD_ms2X-Vgj2TWnC6Svwxi4/exec";
+  // YOUR GOOGLE SCRIPT URL — must match a CURRENT deployment of the .gs file:
+  const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxjP2rJ6oL5WTP4mYGSQnhoVTlaDi4mhk-h5OTYCP4m-CEQy0c821Xcx-M1WLx7iobN/exec";
 
   // Login Logic
   document.getElementById('loginBtn').addEventListener('click', () => {
@@ -102,45 +102,61 @@
     }
   });
 
-  // Fetch Live Data from Google Sheets
-  async function loadData() {
-    try {
-      const response = await fetch(GOOGLE_SCRIPT_URL);
-      let guests = await response.json();
-      
-      // Filter for those who confirmed attendance
-      // Note: We check if attending is true (boolean) or "Coming" (string)
-      const attendingList = guests.filter(g => g.attending === true || g.attending === "Coming" || g.attending === "true");
-      const totalHeadcount = attendingList.reduce((sum, g) => sum + parseInt(g.guests || 0), 0);
+  // Fetch Live Data from Google Sheets using JSONP
+  // (fetch() gets blocked by CORS on the redirect Apps Script issues, so we
+  // load the data via a <script> tag instead, which isn't subject to CORS.)
+  function loadData() {
+    const callbackName = 'handleGuestData_' + Date.now();
 
-      document.getElementById('adminStats').innerHTML = `
-        <div class="stat-box"><div class="stat-num">${totalHeadcount}</div><div class="stat-lbl">Total Guests</div></div>
-        <div class="stat-box"><div class="stat-num">${attendingList.length}</div><div class="stat-lbl">Confirmed (Yes)</div></div>
-      `;
+    window[callbackName] = function(data) {
+      renderDashboard(data);
+      delete window[callbackName];
+      script.remove();
+    };
 
-      if (guests.length === 0) {
-        document.getElementById('adminList').innerHTML = '<p class="loading-text">No responses yet.</p>';
-        return;
-      }
+    const script = document.createElement('script');
+    script.src = GOOGLE_SCRIPT_URL + '?callback=' + callbackName;
+    script.onerror = () => {
+      document.getElementById('adminList').innerHTML = '<p class="loading-text" style="color: red;">Error loading data. Check the script URL.</p>';
+    };
+    document.body.appendChild(script);
+  }
 
-      document.getElementById('adminList').innerHTML = guests.reverse().map(g => {
-        // Handle the attending status badge
-        const isComing = g.attending === true || g.attending === "Coming" || g.attending === "true";
-        return `
-          <div class="list-row">
-            <div>
-              <div class="list-name">${g.name || 'Unknown'}</div>
-              <div class="list-meta">${g.phone ? g.phone + ' | ' : ''}${g.time || ''}</div>
-            </div>
-            <div class="badge ${isComing ? 'badge-yes' : 'badge-no'}">${isComing ? g.guests + ' Coming' : 'Declined'}</div>
-          </div>
-        `;
-      }).join('');
+  // Formats the raw time value coming back from the sheet into a readable time
+  function formatTime(rawTime) {
+    if (!rawTime) return '';
+    const d = new Date(rawTime);
+    if (isNaN(d.getTime())) return rawTime;
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
 
-    } catch (error) {
-      console.error(error);
-      document.getElementById('adminList').innerHTML = '<p class="loading-text" style="color: red;">Error processing data.</p>';
+  function renderDashboard(data) {
+    // Calculate based on "Status" column
+    const attendingList = data.filter(g => g.status === "Coming");
+    const totalHeadcount = attendingList.reduce((sum, g) => sum + (parseInt(g.guests) || 0), 0);
+
+    document.getElementById('adminStats').innerHTML = `
+      <div class="stat-box"><div class="stat-num">${totalHeadcount}</div><div class="stat-lbl">Total Guests</div></div>
+      <div class="stat-box"><div class="stat-num">${attendingList.length}</div><div class="stat-lbl">Confirmed (Yes)</div></div>
+    `;
+
+    if (data.length === 0) {
+      document.getElementById('adminList').innerHTML = '<p class="loading-text">No responses yet.</p>';
+      return;
     }
+
+    document.getElementById('adminList').innerHTML = data.reverse().map(g => {
+      const isComing = g.status === "Coming";
+      return `
+        <div class="list-row">
+          <div>
+            <div class="list-name">${g.name || 'Guest'}</div>
+            <div class="list-meta">${g.phone ? g.phone + ' | ' : ''}${formatTime(g.time)}</div>
+          </div>
+          <div class="badge ${isComing ? 'badge-yes' : 'badge-no'}">${isComing ? (g.guests || 1) + ' Coming' : 'Declined'}</div>
+        </div>
+      `;
+    }).join('');
   }
 </script>
 </body>
